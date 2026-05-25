@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Tomás Cabral</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+*{cursor:none!important;}
+html,body{width:100%;height:100%;background:#0a0a0a;color:#e8e8e8;overflow:hidden;
+  font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}
+
+#app{position:fixed;inset:0;}
+
+/* ── Sidebar ── */
+#sidebar{
+  position:absolute;top:50%;left:0;
+  transform:translateY(-50%);
+  display:flex;flex-direction:column;align-items:center;
+  z-index:10;gap:0;
+  padding:0 16px;
+  pointer-events:auto;
+}
+#octopus-canvas{display:block;margin-bottom:5px;}
+#name-link{
+  display:block;text-decoration:none;color:#e8e8e8;
+  font-size:10px;font-weight:400;letter-spacing:0.26em;text-transform:uppercase;
+  line-height:1.65;transition:opacity 0.2s;text-align:center;
+}
+#name-link:hover{opacity:0.4;}
+#name-link span{display:block;}
+
+/* ── Board ── */
+#board-wrap{position:absolute;inset:0;overflow:hidden;background:#0a0a0a;}
+#board{position:absolute;transform-origin:0 0;will-change:transform;}
+.tile{position:absolute;overflow:hidden;background:#0a0a0a;}
+.tile img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  pointer-events:none;user-select:none;-webkit-user-drag:none;
+}
+
+/* ── Corner icons ── */
+.corner-icon{
+  position:fixed;z-index:100;
+  width:22px;height:22px;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity 0.2s;
+}
+.corner-icon:hover{opacity:0.5;}
+.corner-icon.active svg *{stroke-width:0;} /* filled when active */
+#icon-circle {top:20px;  right:20px;}
+#icon-square {top:20px;  left:20px;}
+#icon-tri    {bottom:20px; left:20px;}
+#icon-cross  {bottom:20px; right:20px;}
+
+/* ── Search prompt ── */
+#search-overlay{
+  position:fixed;inset:0;z-index:600;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.7);
+}
+#search-overlay.open{display:flex;}
+#search-box{
+  border:1px solid rgba(255,255,255,0.55);
+  background:transparent;
+  width:min(520px,80vw);
+  padding:22px 24px;
+  position:relative;
+}
+#search-input{
+  width:100%;background:transparent;border:none;outline:none;
+  font-family:inherit;font-size:12px;font-weight:300;
+  letter-spacing:0.14em;color:#e8e8e8;
+  caret-color:transparent; /* we draw our own cursor */
+}
+#search-cursor{
+  display:inline-block;width:1px;height:13px;
+  background:#e8e8e8;vertical-align:middle;margin-left:1px;
+  animation:blink 1s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+#search-hint{
+  font-size:9px;letter-spacing:0.18em;text-transform:uppercase;
+  color:rgba(255,255,255,0.25);margin-top:12px;
+}
+
+/* ── Slideshow ── */
+#slideshow{
+  position:fixed;inset:0;z-index:500;background:#000;
+  display:none;align-items:center;justify-content:center;
+  opacity:0;transition:opacity 0.28s ease;
+}
+#slideshow.open{display:flex;}
+#slideshow.visible{opacity:1;}
+#ss-img{max-width:88vw;max-height:88vh;object-fit:contain;display:block;
+  user-select:none;pointer-events:none;-webkit-user-drag:none;
+  transition:opacity 0.16s ease;}
+#ss-close{display:none;}
+.ss-arrow{position:fixed;top:50%;transform:translateY(-50%);
+  font-size:18px;font-weight:200;color:rgba(255,255,255,0.2);
+  padding:28px 18px;transition:color 0.2s;user-select:none;}
+.ss-arrow:hover{color:rgba(255,255,255,0.75);}
+#ss-prev{left:6px;}#ss-next{right:6px;}
+#ss-counter{position:fixed;bottom:22px;right:26px;font-size:9px;
+  letter-spacing:0.18em;color:rgba(255,255,255,0.16);}
+#ss-caption{position:fixed;bottom:22px;left:26px;font-size:9px;
+  letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.2);}
+
+/* ── Cursor ── */
+#cursor{position:fixed;top:0;left:0;pointer-events:none;z-index:9999;
+  width:18px;height:18px;transform:translate(-50%,-50%);mix-blend-mode:difference;}
+#cursor svg{display:block;overflow:visible;}
+@media(hover:none){#cursor{display:none!important;}*{cursor:auto!important;}}
+#cursor.on-tile circle:first-child{opacity:0;transition:opacity 0.15s;}
+#cursor circle:first-child{transition:opacity 0.15s;}
+</style>
+</head>
+<body>
+
+<div id="cursor">
+  <svg viewBox="0 0 18 18" width="18" height="18" fill="none">
+    <circle cx="9" cy="9" r="7.5" stroke="rgba(255,255,255,0.7)" stroke-width="0.9"/>
+    <circle id="cur-dot" cx="9" cy="9" r="2.4" fill="rgba(255,255,255,0.9)"/>
+  </svg>
+</div>
+
+<!-- Corner icons -->
+<div class="corner-icon active" id="icon-circle" title="Spiral">
+  <svg width="16" height="16" viewBox="0 0 16 16">
+    <circle cx="8" cy="8" r="7" fill="white"/>
+  </svg>
+</div>
+<div class="corner-icon" id="icon-square" title="Grid">
+  <svg width="16" height="16" viewBox="0 0 16 16">
+    <rect x="1" y="1" width="14" height="14" fill="white"/>
+  </svg>
+</div>
+<div class="corner-icon" id="icon-tri" title="Pyramid">
+  <svg width="16" height="16" viewBox="0 0 16 16">
+    <polygon points="8,1 15,15 1,15" fill="white"/>
+  </svg>
+</div>
+<div class="corner-icon" id="icon-cross" title="Search">
+  <svg width="16" height="16" viewBox="0 0 16 16">
+    <line x1="2" y1="2" x2="14" y2="14" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="14" y1="2" x2="2" y2="14" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<div id="app">
+  <aside id="sidebar">
+    <a href="https://www.instagram.com/tomas.cabral_" target="_blank" rel="noopener" style="display:block;line-height:0;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.5'" onmouseout="this.style.opacity='1'">
+      <canvas id="octopus-canvas"></canvas>
+    </a>
+    <a id="name-link" href="mailto:tomas.cabral@pm.me">
+      <span>Tom&#225;s</span>
+      <span>Cabral</span>
+    </a>
+  </aside>
+  <div id="board-wrap">
+    <div id="board"></div>
+  </div>
+</div>
+
+<!-- Slideshow -->
+<div id="slideshow">
+  <img id="ss-img" src="" alt="" draggable="false"/>
+  <div id="ss-close" style="display:none"></div>
+  <div class="ss-arrow" id="ss-prev">←</div>
+  <div class="ss-arrow" id="ss-next">→</div>
+  <div id="ss-counter"></div>
+  <div id="ss-caption"></div>
+</div>
+
+<!-- Search overlay -->
+<div id="search-overlay">
+  <div id="search-box">
+    <input id="search-input" type="text" placeholder="Search by hashtag, face, object…" autocomplete="off" spellcheck="false"/>
+    <span id="search-cursor"></span>
+    <div id="search-hint">esc to close · enter to search</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════
+const allImages = [
+  {src:'https://images.unsplash.com/photo-1480796927426-f609979314bd?w=400&q=92&auto=format&fit=crop',title:'Space I',sub:'2025'},
+  {src:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=92&auto=format&fit=crop',title:'Space II',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400&q=92&auto=format&fit=crop',title:'Space III',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?w=400&q=92&auto=format&fit=crop',title:'Space IV',sub:'2023'},
+  {src:'https://images.unsplash.com/photo-1470770903676-69b98201ea1c?w=400&q=92&auto=format&fit=crop',title:'Space V',sub:'2023'},
+  {src:'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=400&q=92&auto=format&fit=crop',title:'Space VI',sub:'2022'},
+  {src:'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=92&auto=format&fit=crop',title:'People I',sub:'2025'},
+  {src:'https://images.unsplash.com/photo-1472740378865-80aab8e73251?w=400&q=92&auto=format&fit=crop',title:'People II',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&q=92&auto=format&fit=crop',title:'People III',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&q=92&auto=format&fit=crop',title:'Light I',sub:'2025'},
+  {src:'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=400&q=92&auto=format&fit=crop',title:'Light II',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1518391846015-55a9cc003b25?w=400&q=92&auto=format&fit=crop',title:'Light III',sub:'2023'},
+  {src:'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400&q=92&auto=format&fit=crop',title:'Material I',sub:'2025'},
+  {src:'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400&q=92&auto=format&fit=crop',title:'Material II',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=92&auto=format&fit=crop',title:'Material III',sub:'2023'},
+  {src:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=92&auto=format&fit=crop',title:'Landscape I',sub:'2025'},
+  {src:'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&q=92&auto=format&fit=crop',title:'Landscape II',sub:'2024'},
+  {src:'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&q=92&auto=format&fit=crop',title:'Landscape III',sub:'2023'},
+];
+const images = [];
+while(images.length < 380) allImages.forEach(img=>{ if(images.length<380) images.push({...img}); });
+
+// ═══════════════════════════════════════════════════════
+//  LAYOUT ENGINE — three modes
+// ═══════════════════════════════════════════════════════
+const TILE = 28, GAP = 1, STEP = TILE + GAP;
+let currentMode = 'spiral';
+let tileEls = [];
+
+// Seeded random
+let seed = 42;
+function rand(){ seed=(seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/0xffffffff; }
+function resetSeed(){ seed=42; }
+
+function buildSpiral() {
+  resetSeed();
+  const goldenAngle = 2.39996322972865;
+  // Uniform spread so tiles NEVER overlap — STEP is the minimum radius increment
+  const BASE = STEP * 1.04;
+  const CX = 400, CY = 400;
+  return images.map((img, i) => {
+    const r = BASE * Math.sqrt(i + 1);
+    const θ = i * goldenAngle;
+    // tiny jitter — max 20% of STEP, never enough to cause overlap
+    const ja = rand() * STEP * 0.18;
+    const jθ = rand() * Math.PI * 2;
+    return {
+      x: Math.round(CX + Math.cos(θ)*r + Math.cos(jθ)*ja),
+      y: Math.round(CY + Math.sin(θ)*r + Math.sin(jθ)*ja),
+      img, i
+    };
+  });
+}
+
+function buildGrid() {
+  resetSeed();
+  const COLS = Math.ceil(Math.sqrt(images.length * 1.1));
+  return images.map((img, i) => ({
+    x: (i % COLS) * STEP,
+    y: Math.floor(i / COLS) * STEP,
+    img, i
+  }));
+}
+
+function buildPyramid() {
+  resetSeed();
+  const placed = [];
+  let row = 0, idx = 0;
+  while(idx < images.length) {
+    const rowCount = row + 1;
+    for(let col = 0; col < rowCount && idx < images.length; col++, idx++) {
+      // center each row
+      const rowW = rowCount * STEP - GAP;
+      const startX = -rowW / 2;
+      placed.push({
+        x: Math.round(startX + col * STEP) + 400,
+        y: row * STEP,
+        img: images[idx], i: idx
+      });
+    }
+    row++;
+  }
+  return placed;
+}
+
+function getLayout(mode) {
+  if(mode === 'spiral')  return buildSpiral();
+  if(mode === 'grid')    return buildGrid();
+  if(mode === 'pyramid') return buildPyramid();
+  return buildSpiral();
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOARD
+// ═══════════════════════════════════════════════════════
+const wrap  = document.getElementById('board-wrap');
+const board = document.getElementById('board');
+let hasDragged = false;
+let tScale=1, tTx=0, tTy=0, scale=1, tx=0, ty=0;
+let isDrag=false, dsx=0, dsy=0, dox=0, doy=0;
+const MIN_S=0.15, MAX_S=10;
+
+function applyLayout(mode, animate) {
+  const placed = getLayout(mode);
+
+  // Bounding box
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  placed.forEach(p=>{
+    minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
+    maxX=Math.max(maxX,p.x+TILE); maxY=Math.max(maxY,p.y+TILE);
+  });
+  const pad=48;
+  const totalW=maxX-minX+pad*2, totalH=maxY-minY+pad*2;
+  board.style.width=totalW+'px'; board.style.height=totalH+'px';
+
+  if(tileEls.length === 0) {
+    // First build: create DOM
+    placed.forEach(({x,y,img,i})=>{
+      const tile=document.createElement('div');
+      tile.className='tile';
+      tile.style.cssText=`left:${x-minX+pad}px;top:${y-minY+pad}px;width:${TILE}px;height:${TILE}px;`;
+      const im=document.createElement('img');
+      im.src=img.src; im.alt=img.title; im.loading='lazy'; im.draggable=false;
+      tile.appendChild(im);
+      tile.addEventListener('click',()=>{ if(!hasDragged) openSlideshow(i); });
+      board.appendChild(tile);
+      tileEls.push(tile);
+    });
+  } else {
+    // Re-layout: animate tiles to new positions
+    placed.forEach(({x,y},i)=>{
+      const el = tileEls[i];
+      if(!el) return;
+      el.style.transition = animate ? 'left 0.65s cubic-bezier(0.4,0,0.2,1), top 0.65s cubic-bezier(0.4,0,0.2,1)' : 'none';
+      el.style.left = (x-minX+pad)+'px';
+      el.style.top  = (y-minY+pad)+'px';
+    });
+    setTimeout(()=>tileEls.forEach(el=>el.style.transition='none'), 700);
+  }
+
+  // Center view
+  const vw=wrap.clientWidth, vh=wrap.clientHeight;
+  tTx=(vw-totalW*tScale)/2; tTy=(vh-totalH*tScale)/2;
+  if(tileEls.length===0 || !animate){ tx=tTx; ty=tTy; }
+}
+
+applyLayout('spiral', false);
+
+function lerp(a,b,t){return a+(b-a)*t;}
+(function tick(){
+  tx=lerp(tx,tTx,0.11); ty=lerp(ty,tTy,0.11); scale=lerp(scale,tScale,0.11);
+  board.style.transform=`translate(${tx.toFixed(2)}px,${ty.toFixed(2)}px) scale(${scale.toFixed(4)})`;
+  requestAnimationFrame(tick);
+})();
+
+wrap.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=wrap.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const f=e.deltaY<0?1.038:0.963;
+  const ns=Math.max(MIN_S,Math.min(MAX_S,tScale*f));
+  const r=ns/tScale;
+  tTx=mx-(mx-tTx)*r; tTy=my-(my-tTy)*r; tScale=ns;
+},{passive:false});
+
+wrap.addEventListener('mousedown',e=>{
+  if(e.button!==0)return;
+  isDrag=true; hasDragged=false;
+  dsx=e.clientX; dsy=e.clientY; dox=tTx; doy=tTy;
+});
+window.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  const dx=e.clientX-dsx, dy=e.clientY-dsy;
+  if(Math.abs(dx)>4||Math.abs(dy)>4) hasDragged=true;
+  tTx=dox+dx; tTy=doy+dy;
+});
+window.addEventListener('mouseup',()=>{ isDrag=false; setTimeout(()=>hasDragged=false,50); });
+window.addEventListener('resize',()=>{
+  const vw=wrap.clientWidth,vh=wrap.clientHeight;
+  tTx=(vw-parseFloat(board.style.width)*tScale)/2;
+  tTy=(vh-parseFloat(board.style.height)*tScale)/2;
+});
+
+// Touch
+let lt=null,lp=null;
+wrap.addEventListener('touchstart',e=>{
+  if(e.touches.length===2) lp=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  else lt={x:e.touches[0].clientX,y:e.touches[0].clientY,ox:tTx,oy:tTy};
+},{passive:true});
+wrap.addEventListener('touchmove',e=>{
+  if(e.touches.length===2&&lp){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);tScale=Math.max(MIN_S,Math.min(MAX_S,tScale*(d/lp)));lp=d;}
+  else if(lt){tTx=lt.ox+(e.touches[0].clientX-lt.x);tTy=lt.oy+(e.touches[0].clientY-lt.y);}
+},{passive:true});
+wrap.addEventListener('touchend',()=>{lp=null;lt=null;},{passive:true});
+
+// ═══════════════════════════════════════════════════════
+//  CORNER ICONS
+// ═══════════════════════════════════════════════════════
+const iconCircle = document.getElementById('icon-circle');
+const iconSquare = document.getElementById('icon-square');
+const iconTri    = document.getElementById('icon-tri');
+const iconCross  = document.getElementById('icon-cross');
+
+function setActiveIcon(el) {
+  [iconCircle,iconSquare,iconTri].forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+iconCircle.addEventListener('click',()=>{
+  setActiveIcon(iconCircle);
+  currentMode='spiral';
+  applyLayout('spiral',true);
+});
+iconSquare.addEventListener('click',()=>{
+  setActiveIcon(iconSquare);
+  currentMode='grid';
+  applyLayout('grid',true);
+});
+iconTri.addEventListener('click',()=>{
+  setActiveIcon(iconTri);
+  currentMode='pyramid';
+  applyLayout('pyramid',true);
+});
+iconCross.addEventListener('click',()=>{
+  document.getElementById('search-overlay').classList.add('open');
+  document.getElementById('search-input').focus();
+});
+
+// ═══════════════════════════════════════════════════════
+//  SEARCH OVERLAY
+// ═══════════════════════════════════════════════════════
+const searchOverlay = document.getElementById('search-overlay');
+const searchInput   = document.getElementById('search-input');
+
+searchOverlay.addEventListener('click',e=>{ if(e.target===searchOverlay) searchOverlay.classList.remove('open'); });
+searchInput.addEventListener('keydown',e=>{
+  if(e.key==='Escape') searchOverlay.classList.remove('open');
+  if(e.key==='Enter'){
+    const q = searchInput.value.trim();
+    if(q) {
+      // Visual feedback — could hook to real search API
+      document.getElementById('search-box').style.borderColor='rgba(255,255,255,0.9)';
+      setTimeout(()=>{ document.getElementById('search-box').style.borderColor='rgba(255,255,255,0.55)'; },400);
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  SLIDESHOW
+// ═══════════════════════════════════════════════════════
+const ss=document.getElementById('slideshow');
+const ssImg=document.getElementById('ss-img');
+let ssIdx=0;
+function openSlideshow(i){
+  ssIdx=i; ssImg.style.opacity='1';
+  ssImg.src=images[i].src;
+  document.getElementById('ss-caption').textContent=(images[i].title||'')+(images[i].sub?' · '+images[i].sub:'');
+  document.getElementById('ss-counter').textContent=String(i+1).padStart(2,'0')+' / '+String(images.length).padStart(2,'0');
+  ss.classList.add('open');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>ss.classList.add('visible')));
+}
+function closeSlideshow(){
+  ss.classList.remove('visible');
+  ss.addEventListener('transitionend',function h(){ ss.removeEventListener('transitionend',h); ss.classList.remove('open'); ssImg.src=''; },{once:true});
+}
+function navigate(d){
+  ssIdx=(ssIdx+d+images.length)%images.length;
+  ssImg.style.opacity='0';
+  setTimeout(()=>{
+    ssImg.src=images[ssIdx].src;
+    document.getElementById('ss-caption').textContent=(images[ssIdx].title||'')+(images[ssIdx].sub?' · '+images[ssIdx].sub:'');
+    document.getElementById('ss-counter').textContent=String(ssIdx+1).padStart(2,'0')+' / '+String(images.length).padStart(2,'0');
+    ssImg.style.opacity='1';
+  },160);
+}
+document.getElementById('ss-close').addEventListener('click',closeSlideshow);
+document.getElementById('ss-prev').addEventListener('click',()=>navigate(-1));
+document.getElementById('ss-next').addEventListener('click',()=>navigate(1));
+ss.addEventListener('click',e=>{ if(e.target===ss) closeSlideshow(); });
+document.addEventListener('keydown',e=>{
+  if(ss.classList.contains('open')){ if(e.key==='ArrowLeft')navigate(-1); if(e.key==='ArrowRight')navigate(1); if(e.key==='Escape')closeSlideshow(); return; }
+  if(e.key==='Escape') searchOverlay.classList.remove('open');
+});
+let swX=0;
+ss.addEventListener('touchstart',e=>{swX=e.touches[0].clientX;},{passive:true});
+ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if(Math.abs(dx)>50)navigate(dx<0?1:-1); },{passive:true});
+
+// ═══════════════════════════════════════════════════════
+//  OCTOPUS — fixed body, S-wave tentacles, random blink
+// ═══════════════════════════════════════════════════════
+(function(){
+  const canvas = document.getElementById('octopus-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const SIZE = 56, DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width  = SIZE * DPR;
+  canvas.height = SIZE * DPR;
+  canvas.style.width  = SIZE + 'px';
+  canvas.style.height = SIZE + 'px';
+  ctx.scale(DPR, DPR);
+
+  const W=SIZE, H=SIZE, BX=W/2, BY=H*0.44;
+  const BH=9, BW=6.5;
+  let t = 0;
+
+  // 8 tentacles fanning downward
+  const NTENT = 8;
+  const tents = Array.from({length:NTENT}, (_,i) => ({
+    baseAngle: Math.PI/2 + (i/(NTENT-1) - 0.5) * Math.PI * 0.72,
+    phase:     (i/NTENT) * Math.PI * 2,
+    len:       13 + (i%3) * 1.5,
+    amp:       0.16 + (i*7%5) * 0.022,
+    freq:      0.22 + (i*3%4) * 0.038,
+    segs:      9,
+    thick:     1.55 - i * 0.048,
+  }));
+
+  // Blink state
+  let blinkTimer = 0;
+  let nextBlink  = 180 + Math.random()*300;
+  let blinkOpen  = 1.0; // 1=fully open, 0=shut
+
+  function drawTentacle(tent) {
+    const pts = [{x: BX, y: BY + BH*0.4}];
+    for(let s=1; s<=tent.segs; s++) {
+      const frac = s / tent.segs;
+      // S-wave: two travelling sine waves create S-shape
+      const w1 = Math.sin(t*tent.freq  + tent.phase + frac*Math.PI*3.5) * tent.amp * (0.5 + frac*0.7);
+      const w2 = Math.sin(t*tent.freq*1.6 + tent.phase*1.3 + frac*Math.PI*2) * tent.amp * 0.35 * frac;
+      const angle   = tent.baseAngle + w1 + w2;
+      const segLen  = (tent.len / tent.segs) * (1 - frac*0.20);
+      const prev    = pts[pts.length-1];
+      pts.push({ x: prev.x + Math.cos(angle)*segLen,
+                 y: prev.y + Math.sin(angle)*segLen });
+    }
+    // Full stroke — thick at root
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let s=1; s<pts.length-1; s++) {
+      const mx=(pts[s].x+pts[s+1].x)/2, my=(pts[s].y+pts[s+1].y)/2;
+      ctx.quadraticCurveTo(pts[s].x, pts[s].y, mx, my);
+    }
+    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+    ctx.lineWidth   = Math.max(0.4, tent.thick);
+    ctx.strokeStyle = 'rgba(255,255,255,0.80)';
+    ctx.stroke();
+    // Thin overdraw on distal half
+    ctx.beginPath();
+    const h = Math.floor(pts.length*0.52);
+    ctx.moveTo(pts[h].x, pts[h].y);
+    for(let s=h+1; s<pts.length; s++) ctx.lineTo(pts[s].x, pts[s].y);
+    ctx.lineWidth   = Math.max(0.2, tent.thick*0.38);
+    ctx.strokeStyle = 'rgba(255,255,255,0.48)';
+    ctx.stroke();
+    // Sucker dots
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    for(let s=2; s<pts.length-1; s+=2) {
+      const r = Math.max(0.18, 0.52 - (s/pts.length)*0.38);
+      ctx.beginPath(); ctx.arc(pts[s].x, pts[s].y, r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function draw() {
+    t += 0.010;
+
+    // Blink logic
+    blinkTimer++;
+    if(blinkTimer >= nextBlink) {
+      const bp = blinkTimer - nextBlink;
+      // squish down over 6 frames, back up over 6
+      if(bp < 6)       blinkOpen = 1 - bp/6;
+      else if(bp < 12) blinkOpen = (bp-6)/6;
+      else { blinkOpen=1; blinkTimer=0; nextBlink=180+Math.random()*300; }
+    }
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineCap='round'; ctx.lineJoin='round';
+
+    // Tentacles
+    tents.forEach(drawTentacle);
+
+    // Body
+    ctx.save();
+    ctx.translate(BX, BY);
+    ctx.fillStyle = 'rgba(255,255,255,0.90)';
+    ctx.beginPath();
+    ctx.moveTo(0, -BH);
+    ctx.bezierCurveTo( BW,-BH*0.62,  BW, BH*0.22, 0, BH*0.52);
+    ctx.bezierCurveTo(-BW, BH*0.22, -BW,-BH*0.62, 0,-BH);
+    ctx.fill();
+    // Mantle line
+    ctx.strokeStyle='rgba(10,10,10,0.18)'; ctx.lineWidth=0.45;
+    ctx.beginPath();
+    ctx.moveTo(0,-BH*0.68);
+    ctx.bezierCurveTo(BW*0.45,-BH*0.28, BW*0.45,BH*0.08, 0,BH*0.38);
+    ctx.stroke();
+    // Eyes with blink
+    const EO=2.4, EY=-BH*0.06, ER=1.05;
+    ctx.save();
+    ctx.scale(1, Math.max(0.05, blinkOpen));
+    ctx.fillStyle = 'rgba(10,10,10,0.92)';
+    ctx.beginPath(); ctx.arc(-EO, EY, ER, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( EO, EY, ER, 0, Math.PI*2); ctx.fill();
+    if(blinkOpen > 0.5) {
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      ctx.beginPath(); ctx.arc(-EO-0.35, EY-0.35, 0.34, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( EO-0.35, EY-0.35, 0.34, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore(); // eye scale
+    ctx.restore(); // translate
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ═══════════════════════════════════════════════════════
+//  CURSOR
+// ═══════════════════════════════════════════════════════
+(function(){
+  const dot=document.getElementById('cur-dot');
+  const cur=document.getElementById('cursor');
+  const CX=9,CY=9;
+  let mX=0,mY=0,dotX=CX,dotY=CY,tX=CX,tY=CY,vX=0,vY=0;
+  document.addEventListener('mousemove',e=>{
+    const dx=e.clientX-mX,dy=e.clientY-mY;
+    mX=e.clientX;mY=e.clientY;
+    cur.style.left=mX+'px'; cur.style.top=mY+'px';
+    const spd=Math.sqrt(dx*dx+dy*dy);
+    if(spd>0.3){const s=Math.min(spd*0.5,4.5);tX=CX+(dx/spd)*s;tY=CY+(dy/spd)*s;vX+=(dx/spd)*s*0.25;vY+=(dy/spd)*s*0.25;}
+  });
+  (function loop(){
+    vX=(vX+(tX-dotX)*0.13)*0.76;vY=(vY+(tY-dotY)*0.13)*0.76;
+    dotX+=vX;dotY+=vY;
+    tX+=(CX-tX)*0.03;tY+=(CY-tY)*0.03;
+    dot.setAttribute('cx',dotX.toFixed(2));dot.setAttribute('cy',dotY.toFixed(2));
+    requestAnimationFrame(loop);
+  })();
+  document.addEventListener('mousedown',()=>dot.setAttribute('r','1.2'));
+  document.addEventListener('mouseup',()=>dot.setAttribute('r','2.4'));
+  document.addEventListener('mouseleave',()=>{cur.style.opacity='0';});
+  document.addEventListener('mouseenter',()=>{cur.style.opacity='1';});
+
+  // Hide outer ring when hovering over tiles
+  document.addEventListener('mouseover', e => {
+    if(e.target && e.target.closest && e.target.closest('.tile')) {
+      cur.classList.add('on-tile');
+    } else {
+      cur.classList.remove('on-tile');
+    }
+  });
+})();
+</script>
+</body>
+</html>
