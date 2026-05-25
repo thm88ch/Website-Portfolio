@@ -3,7 +3,24 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>Tomás Cabral</title>
+<title>Tomás Cabral — Photography</title>
+<meta name="description" content="Tomás Cabral — photographer. Portfolio of landscapes, people, light and material.">
+<meta name="author" content="Tomás Cabral">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Tomás Cabral — Photography">
+<meta property="og:description" content="Portfolio of Tomás Cabral, photographer.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tomascabral.com">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Tomás Cabral",
+  "url": "https://tomascabral.com",
+  "sameAs": ["https://www.instagram.com/tomas.cabral_"],
+  "jobTitle": "Photographer"
+}
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 *{cursor:none!important;}
@@ -223,13 +240,11 @@ function resetSeed(){ seed=42; }
 function buildSpiral() {
   resetSeed();
   const goldenAngle = 2.39996322972865;
-  // Uniform spread so tiles NEVER overlap — STEP is the minimum radius increment
   const BASE = STEP * 1.04;
   const CX = 400, CY = 400;
   return images.map((img, i) => {
     const r = BASE * Math.sqrt(i + 1);
     const θ = i * goldenAngle;
-    // tiny jitter — max 20% of STEP, never enough to cause overlap
     const ja = rand() * STEP * 0.18;
     const jθ = rand() * Math.PI * 2;
     return {
@@ -257,7 +272,6 @@ function buildPyramid() {
   while(idx < images.length) {
     const rowCount = row + 1;
     for(let col = 0; col < rowCount && idx < images.length; col++, idx++) {
-      // center each row
       const rowW = rowCount * STEP - GAP;
       const startX = -rowW / 2;
       placed.push({
@@ -291,7 +305,6 @@ const MIN_S=0.15, MAX_S=10;
 function applyLayout(mode, animate) {
   const placed = getLayout(mode);
 
-  // Bounding box
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   placed.forEach(p=>{
     minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
@@ -302,7 +315,6 @@ function applyLayout(mode, animate) {
   board.style.width=totalW+'px'; board.style.height=totalH+'px';
 
   if(tileEls.length === 0) {
-    // First build: create DOM
     placed.forEach(({x,y,img,i})=>{
       const tile=document.createElement('div');
       tile.className='tile';
@@ -315,7 +327,6 @@ function applyLayout(mode, animate) {
       tileEls.push(tile);
     });
   } else {
-    // Re-layout: animate tiles to new positions
     placed.forEach(({x,y},i)=>{
       const el = tileEls[i];
       if(!el) return;
@@ -326,7 +337,6 @@ function applyLayout(mode, animate) {
     setTimeout(()=>tileEls.forEach(el=>el.style.transition='none'), 700);
   }
 
-  // Center view
   const vw=wrap.clientWidth, vh=wrap.clientHeight;
   tTx=(vw-totalW*tScale)/2; tTy=(vh-totalH*tScale)/2;
   if(tileEls.length===0 || !animate){ tx=tTx; ty=tTy; }
@@ -345,7 +355,7 @@ wrap.addEventListener('wheel',e=>{
   e.preventDefault();
   const rect=wrap.getBoundingClientRect();
   const mx=e.clientX-rect.left, my=e.clientY-rect.top;
-  const f=e.deltaY<0?1.038:0.963;
+  const f=e.deltaY<0?1.017:0.984;
   const ns=Math.max(MIN_S,Math.min(MAX_S,tScale*f));
   const r=ns/tScale;
   tTx=mx-(mx-tTx)*r; tTy=my-(my-tTy)*r; tScale=ns;
@@ -426,7 +436,6 @@ searchInput.addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     const q = searchInput.value.trim();
     if(q) {
-      // Visual feedback — could hook to real search API
       document.getElementById('search-box').style.borderColor='rgba(255,255,255,0.9)';
       setTimeout(()=>{ document.getElementById('search-box').style.borderColor='rgba(255,255,255,0.55)'; },400);
     }
@@ -491,7 +500,6 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
   const BH=9, BW=6.5;
   let t = 0;
 
-  // 8 tentacles fanning downward
   const NTENT = 8;
   const tents = Array.from({length:NTENT}, (_,i) => ({
     baseAngle: Math.PI/2 + (i/(NTENT-1) - 0.5) * Math.PI * 0.72,
@@ -503,16 +511,14 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
     thick:     1.55 - i * 0.048,
   }));
 
-  // Blink state
   let blinkTimer = 0;
   let nextBlink  = 180 + Math.random()*300;
-  let blinkOpen  = 1.0; // 1=fully open, 0=shut
+  let blinkOpen  = 1.0;
 
   function drawTentacle(tent) {
     const pts = [{x: BX, y: BY + BH*0.4}];
     for(let s=1; s<=tent.segs; s++) {
       const frac = s / tent.segs;
-      // S-wave: two travelling sine waves create S-shape
       const w1 = Math.sin(t*tent.freq  + tent.phase + frac*Math.PI*3.5) * tent.amp * (0.5 + frac*0.7);
       const w2 = Math.sin(t*tent.freq*1.6 + tent.phase*1.3 + frac*Math.PI*2) * tent.amp * 0.35 * frac;
       const angle   = tent.baseAngle + w1 + w2;
@@ -521,7 +527,6 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
       pts.push({ x: prev.x + Math.cos(angle)*segLen,
                  y: prev.y + Math.sin(angle)*segLen });
     }
-    // Full stroke — thick at root
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for(let s=1; s<pts.length-1; s++) {
@@ -532,7 +537,6 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
     ctx.lineWidth   = Math.max(0.4, tent.thick);
     ctx.strokeStyle = 'rgba(255,255,255,0.80)';
     ctx.stroke();
-    // Thin overdraw on distal half
     ctx.beginPath();
     const h = Math.floor(pts.length*0.52);
     ctx.moveTo(pts[h].x, pts[h].y);
@@ -540,7 +544,6 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
     ctx.lineWidth   = Math.max(0.2, tent.thick*0.38);
     ctx.strokeStyle = 'rgba(255,255,255,0.48)';
     ctx.stroke();
-    // Sucker dots
     ctx.fillStyle = 'rgba(255,255,255,0.40)';
     for(let s=2; s<pts.length-1; s+=2) {
       const r = Math.max(0.18, 0.52 - (s/pts.length)*0.38);
@@ -550,24 +553,16 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
 
   function draw() {
     t += 0.010;
-
-    // Blink logic
     blinkTimer++;
     if(blinkTimer >= nextBlink) {
       const bp = blinkTimer - nextBlink;
-      // squish down over 6 frames, back up over 6
       if(bp < 6)       blinkOpen = 1 - bp/6;
       else if(bp < 12) blinkOpen = (bp-6)/6;
       else { blinkOpen=1; blinkTimer=0; nextBlink=180+Math.random()*300; }
     }
-
     ctx.clearRect(0, 0, W, H);
     ctx.lineCap='round'; ctx.lineJoin='round';
-
-    // Tentacles
     tents.forEach(drawTentacle);
-
-    // Body
     ctx.save();
     ctx.translate(BX, BY);
     ctx.fillStyle = 'rgba(255,255,255,0.90)';
@@ -576,13 +571,11 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
     ctx.bezierCurveTo( BW,-BH*0.62,  BW, BH*0.22, 0, BH*0.52);
     ctx.bezierCurveTo(-BW, BH*0.22, -BW,-BH*0.62, 0,-BH);
     ctx.fill();
-    // Mantle line
     ctx.strokeStyle='rgba(10,10,10,0.18)'; ctx.lineWidth=0.45;
     ctx.beginPath();
     ctx.moveTo(0,-BH*0.68);
     ctx.bezierCurveTo(BW*0.45,-BH*0.28, BW*0.45,BH*0.08, 0,BH*0.38);
     ctx.stroke();
-    // Eyes with blink
     const EO=2.4, EY=-BH*0.06, ER=1.05;
     ctx.save();
     ctx.scale(1, Math.max(0.05, blinkOpen));
@@ -594,8 +587,8 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
       ctx.beginPath(); ctx.arc(-EO-0.35, EY-0.35, 0.34, 0, Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc( EO-0.35, EY-0.35, 0.34, 0, Math.PI*2); ctx.fill();
     }
-    ctx.restore(); // eye scale
-    ctx.restore(); // translate
+    ctx.restore();
+    ctx.restore();
     requestAnimationFrame(draw);
   }
   draw();
@@ -627,8 +620,6 @@ ss.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-swX; if
   document.addEventListener('mouseup',()=>dot.setAttribute('r','2.4'));
   document.addEventListener('mouseleave',()=>{cur.style.opacity='0';});
   document.addEventListener('mouseenter',()=>{cur.style.opacity='1';});
-
-  // Hide outer ring when hovering over tiles
   document.addEventListener('mouseover', e => {
     if(e.target && e.target.closest && e.target.closest('.tile')) {
       cur.classList.add('on-tile');
